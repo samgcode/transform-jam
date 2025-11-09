@@ -1,3 +1,29 @@
-[gd_scene format=3 uid="uid://dnu58q4vshuie"]
+[gd_scene load_steps=4 format=4 uid="uid://dnu58q4vshuie"]
+
+[ext_resource type="Shader" uid="uid://bm2ejfxs6w5nx" path="res://sdf_renderer.gdshader" id="1_ig7tw"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_0xm2m"]
+render_priority = 0
+shader = ExtResource("1_ig7tw")
+shader_parameter/MAX_STEPS = 100
+shader_parameter/MAX_DIST = 100.0
+shader_parameter/SURF_DIST = 0.01
+shader_parameter/BLEND_FACTOR = 0.50000002375
+shader_parameter/BACKGROUND_COLOR = Color(0.32, 0.32, 0.32, 1)
+shader_parameter/POSITIONS = PackedVector3Array(0, 0.76, 0, 0.905, -0.11, -0.965, 0, 1.065, -1.065, 0, -0.675, -2.72, 0, -0.42, -0.6)
+shader_parameter/PROPERTIES = PackedVector4Array(0.51, 0, 0, 1, 1, -1.58, -0.705, 1, 0.5, 0.5, 0.5, 2, 2.715, 3.055, 1.125, 2, 0, 0, 0, 0)
+shader_parameter/COLORS = PackedColorArray(0, 1, 0.1833334, 1, 0, 0, 1, 1, 1, 0, 0, 1, 0.9833336, 0, 1, 1, 0, 0, 0, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_h2yge"]
+material = SubResource("ShaderMaterial_0xm2m")
+flip_faces = true
+size = Vector3(10, 10, 10)
 
 [node name="Node3D" type="Node3D"]
+
+[node name="SdfController" type="SdfController" parent="."]
+mesh = SubResource("BoxMesh_h2yge")
+metadata/_edit_lock_ = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 6.669058)
