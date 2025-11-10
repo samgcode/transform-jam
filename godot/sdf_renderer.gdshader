@@ -1,7 +1,7 @@
 shader_type spatial;
 render_mode unshaded, depth_test_disabled;
 
-const int MAX_SHAPES = 5;
+const int MAX_SHAPES = 3;
 
 uniform int MAX_STEPS = 100;
 uniform float MAX_DIST = 100.0;
@@ -23,7 +23,6 @@ float sdf_box(vec3 point, vec3 bounds) {
   vec3 q = abs(point) - bounds;
   return length(max(q, 0.0)) + min(max(q.x, max(q.y,q.z)), 0.0);
 }
-
 // <\SDF Primitives>
 
 // <SDF Operations>
@@ -39,7 +38,6 @@ vec4 smoothUnion(vec4 a, vec4 b, float k) {
 		mix(b.w, a.w, h) - k * h * (1.0 - h)
 	);
 }
-
 // <\SDF Operations>
 
 float shape_dist(vec3 point, vec3 position, vec4 properties) {
