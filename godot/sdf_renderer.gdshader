@@ -10,7 +10,7 @@ uniform float BLEND_FACTOR: hint_range(0, 2.0) = 1.0;
 
 uniform vec3 BACKGROUND_COLOR : source_color = vec3(0.0);
 
-uniform vec3 POSITIONS[MAX_SHAPES];
+uniform vec4 POSITIONS[MAX_SHAPES];
 uniform vec4 PROPERTIES[MAX_SHAPES]; // vec4(dimensions.xyz, type) type 0.0 means no object
 uniform vec3 COLORS[MAX_SHAPES] : source_color;
 
@@ -58,7 +58,7 @@ vec4 get_scene_info(vec3 point) {
 		if(PROPERTIES[i].w == 0.0) continue;
 		
 		vec3 color = COLORS[i];
-		float dist = shape_dist(point, POSITIONS[i], PROPERTIES[i]);
+		float dist = shape_dist(point, POSITIONS[i].xyz, PROPERTIES[i]);
 
 		// if(dist < output_info.w) {
 		// 	output_info = vec4(color.rgb, dist);
@@ -97,10 +97,6 @@ void fragment() {
 		color = scene_info.rgb;
 
 		if(total_dist > MAX_DIST || scene_info.w < SURF_DIST) break;
-		if(total_dist > MAX_DIST) {
-			color = BACKGROUND_COLOR;
-			break;
-		};
 	}
 
 	if(total_dist >= MAX_DIST) {

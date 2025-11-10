@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://bkcarslm5v2j7"
+path="res://.godot/imported/collision.glsl-f2f554d9618ab1e00bb05f78b08b1ef6.res"
+
+[deps]
+
+source_file="res://collision.glsl"
+dest_files=["res://.godot/imported/collision.glsl-f2f554d9618ab1e00bb05f78b08b1ef6.res"]
+
+[params]
+

@@ -8,9 +8,9 @@ shader = ExtResource("1_ig7tw")
 shader_parameter/MAX_STEPS = 100
 shader_parameter/MAX_DIST = 100.0
 shader_parameter/SURF_DIST = 0.01
-shader_parameter/BLEND_FACTOR = 0.38000001805
+shader_parameter/BLEND_FACTOR = 0.62400002964
 shader_parameter/BACKGROUND_COLOR = Color(0, 0, 0, 1)
-shader_parameter/POSITIONS = PackedVector3Array(0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/POSITIONS = PackedVector4Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 shader_parameter/PROPERTIES = PackedVector4Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 shader_parameter/COLORS = PackedColorArray(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
 
@@ -26,4 +26,4 @@ mesh = SubResource("BoxMesh_h2yge")
 metadata/_edit_lock_ = true
 
 [node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(-1, 5.5016937e-08, -6.7940256e-08, 0, 0.7771459, 0.6293204, 8.742278e-08, 0.6293204, -0.7771459, 0, 1.8894892, -4.2931075)
+transform = Transform3D(-1, 5.619428e-08, -6.696974e-08, 0, 0.7660445, 0.64278764, 8.742278e-08, 0.64278764, -0.7660445, 0, -0.21650791, -3.9052753)
