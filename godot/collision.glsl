@@ -2,10 +2,6 @@
 #version 450
 
 const int NUM_SHAPES = 3;
-const int MAX_STEPS = 100;
-const float MAX_DIST = 100.0;
-const float SURF_DIST = 0.01;
-const float BLEND_FACTOR = 0.2;
 const float EPSILON = 0.01;
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
@@ -24,6 +20,12 @@ layout(set = 0, binding = 2, std430) restrict buffer PropertyBuffer {
   vec4 properties[];
 }
 property_buffer;
+
+layout(set = 0, binding = 3, std430) restrict buffer DataBuffer {
+  float blend_factor[];
+}
+data_buffer;
+
 
 // <SDF Primitives>
 float sdf_sphere(vec3 point, float r) {
@@ -54,14 +56,14 @@ float shape_dist(vec3 point, vec3 position, vec4 properties) {
 }
 
 float get_scene_dist(vec3 point) {
-	float output_dist = MAX_DIST;
+	float output_dist = 100.0;
 
 	for(int i = 0; i < NUM_SHAPES; i++) {
-		if(property_buffer.properties[i].w == 0.0) continue;
+		if(property_buffer.properties[i].w == 0.0 || position_buffer.positions[i].w == 1.0) continue;
 		
 		float dist = shape_dist(point, position_buffer.positions[i].xyz, property_buffer.properties[i]);
 
-		output_dist = smoothUnion(output_dist, dist, BLEND_FACTOR);
+		output_dist = smoothUnion(output_dist, dist, data_buffer.blend_factor[0]);
 	}
 	return output_dist;
 }

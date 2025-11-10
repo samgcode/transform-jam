@@ -8,6 +8,7 @@ use godot::prelude::*;
 
 const SHADER_PATH: &str = "res://collision.glsl";
 
+const BLEND_FACTOR: &str = "BLEND_FACTOR";
 const BACKGROUND: &str = "BACKGROUND_COLOR";
 const POSITIONS: &str = "POSITIONS";
 const PROPERTIES: &str = "PROPERTIES";
@@ -26,10 +27,16 @@ pub struct SdfController {
   #[base]
   base: Base<MeshInstance3D>,
 
+  #[export]
+  blend_factor: f32,
+
   background_color: ColorHsv,
+  #[export]
   positions: PackedVector4Array,
+  #[export]
   properties: PackedVector4Array,
-  colors: PackedColorArray,
+  #[export]
+  colors: PackedVector4Array,
 
   player: Player,
 
@@ -51,20 +58,21 @@ impl IMeshInstance3D for SdfController {
         v: 0.75,
         a: 1.0,
       },
+      blend_factor: 1.0,
       positions: PackedArray::from(&[
-        Vector4::new(0.0, 0.0, -1.5, 0.0),
+        Vector4::new(0.0, 0.0, -1.5, 1.0),
         Vector4::new(0.0, -4.75, 0.0, 0.0),
         Vector4::new(0.0, -3.0, 0.0, 0.0),
       ]),
       properties: PackedArray::from(&[
-        Vector4::new(0.1, 0.0, 0.0, 1.0),
+        Vector4::new(0.02, 0.0, 0.0, 1.0),
         Vector4::new(3.0, 0.0, 0.0, 1.0),
         Vector4::new(5.0, 0.5, 5.0, 2.0),
       ]),
       colors: PackedArray::from(&[
-        Color::from_rgb(1.0, 1.0, 1.0),
-        Color::from_rgb(1.0, 0.0, 0.0),
-        Color::from_rgb(0.0, 0.0, 1.0),
+        Vector4::new(1.0, 1.0, 1.0, 0.0),
+        Vector4::new(1.0, 0.0, 0.0, 0.0),
+        Vector4::new(0.0, 0.0, 1.0, 0.0),
       ]),
       player: Player::init(),
       rendering_device,
@@ -72,6 +80,10 @@ impl IMeshInstance3D for SdfController {
   }
 
   fn physics_process(&mut self, dt: f64) {
+    if self.blend_factor < 0.0 {
+      self.blend_factor = 0.0;
+    }
+
     let mut material = self
       .base_mut()
       .get_mesh()
@@ -91,14 +103,10 @@ impl IMeshInstance3D for SdfController {
       self.player.position.x,
       self.player.position.y,
       self.player.position.z,
-      0.0,
+      1.0,
     );
 
-    let collision = self.compute_collision(
-      PackedArray::from(&[player_pos]),
-      PackedArray::from(&[self.positions[1], self.positions[2]]),
-      PackedArray::from(&[self.properties[1], self.properties[2]]),
-    );
+    let collision = self.compute_collision(PackedArray::from([player_pos]));
 
     if collision.w < 0.0 {
       self.player.on_collision(collision, dt as f32);
@@ -108,11 +116,12 @@ impl IMeshInstance3D for SdfController {
       self.player.position.x,
       self.player.position.y,
       self.player.position.z,
-      0.0,
+      1.0,
     );
 
     self.positions[PLAYER_ID] = player_pos;
 
+    material.set_shader_parameter(BLEND_FACTOR, &self.blend_factor.to_variant());
     material.set_shader_parameter(BACKGROUND, &self.background_color.to_rgb().to_variant());
     material.set_shader_parameter(POSITIONS, &self.positions.to_variant());
     material.set_shader_parameter(PROPERTIES, &self.properties.to_variant());
@@ -121,18 +130,14 @@ impl IMeshInstance3D for SdfController {
 }
 
 impl SdfController {
-  fn compute_collision(
-    &mut self,
-    points: PackedVector4Array,
-    positions: PackedVector4Array,
-    properties: PackedVector4Array,
-  ) -> Vector4 {
+  fn compute_collision(&mut self, points: PackedVector4Array) -> Vector4 {
     let shader_code = load::<RdShaderFile>(SHADER_PATH).get_spirv().unwrap();
     let collision_shader = self.rendering_device.shader_create_from_spirv(&shader_code);
 
     let point_bytes = points.to_byte_array();
-    let position_bytes = positions.to_byte_array();
-    let property_bytes = properties.to_byte_array();
+    let position_bytes = self.positions.to_byte_array();
+    let property_bytes = self.properties.to_byte_array();
+    let data_bytes = PackedArray::from([self.blend_factor]).to_byte_array();
 
     let point_buffer = self
       .rendering_device
@@ -152,6 +157,12 @@ impl SdfController {
       .data(&property_bytes)
       .done();
 
+    let data_buffer = self
+      .rendering_device
+      .storage_buffer_create_ex(data_bytes.len() as u32)
+      .data(&data_bytes)
+      .done();
+
     let mut points_uniform = RdUniform::new_gd();
     points_uniform.set_uniform_type(UniformType::STORAGE_BUFFER);
     points_uniform.set_binding(0);
@@ -167,8 +178,18 @@ impl SdfController {
     property_uniform.set_binding(2);
     property_uniform.add_id(property_buffer);
 
+    let mut data_uniform = RdUniform::new_gd();
+    data_uniform.set_uniform_type(UniformType::STORAGE_BUFFER);
+    data_uniform.set_binding(3);
+    data_uniform.add_id(data_buffer);
+
     let uniform_set = self.rendering_device.uniform_set_create(
-      &Array::from(&[points_uniform, position_uniform, property_uniform]),
+      &Array::from(&[
+        points_uniform,
+        position_uniform,
+        property_uniform,
+        data_uniform,
+      ]),
       collision_shader,
       0,
     );
@@ -198,6 +219,7 @@ impl SdfController {
     self.rendering_device.free_rid(point_buffer);
     self.rendering_device.free_rid(position_buffer);
     self.rendering_device.free_rid(property_buffer);
+    // self.rendering_device.free_rid(data_buffer);
     self.rendering_device.free_rid(pipeline);
     self.rendering_device.free_rid(collision_shader);
 

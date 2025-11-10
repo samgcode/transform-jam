@@ -10,9 +10,9 @@ uniform float BLEND_FACTOR: hint_range(0, 2.0) = 1.0;
 
 uniform vec3 BACKGROUND_COLOR : source_color = vec3(0.0);
 
-uniform vec4 POSITIONS[MAX_SHAPES];
+uniform vec4 POSITIONS[MAX_SHAPES]; // vec4(pos.xyz, flag) flag 0.0 means collidable, 1.0 no collision, 2.0 means no render
 uniform vec4 PROPERTIES[MAX_SHAPES]; // vec4(dimensions.xyz, type) type 0.0 means no object
-uniform vec3 COLORS[MAX_SHAPES] : source_color;
+uniform vec3 COLORS[MAX_SHAPES];
 
 // <SDF Primitives>
 float sdf_sphere(vec3 point, float r) {
@@ -55,7 +55,7 @@ vec4 get_scene_info(vec3 point) {
 	vec4 output_info = vec4(1.0, 1.0, 1.0, MAX_DIST);
 
 	for(int i = 0; i < MAX_SHAPES; i++) {
-		if(PROPERTIES[i].w == 0.0) continue;
+		if(PROPERTIES[i].w == 0.0 || POSITIONS[i].w == 2.0) continue;
 		
 		vec3 color = COLORS[i];
 		float dist = shape_dist(point, POSITIONS[i].xyz, PROPERTIES[i]);

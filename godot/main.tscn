@@ -12,7 +12,7 @@ shader_parameter/BLEND_FACTOR = 0.62400002964
 shader_parameter/BACKGROUND_COLOR = Color(0, 0, 0, 1)
 shader_parameter/POSITIONS = PackedVector4Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 shader_parameter/PROPERTIES = PackedVector4Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-shader_parameter/COLORS = PackedColorArray(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+shader_parameter/COLORS = PackedVector3Array(0, 0, 0, 0, 0, 0, 0, 0, 0)
 
 [sub_resource type="BoxMesh" id="BoxMesh_h2yge"]
 material = SubResource("ShaderMaterial_0xm2m")
@@ -22,6 +22,7 @@ size = Vector3(10, 10, 10)
 [node name="Node3D" type="Node3D"]
 
 [node name="SdfController" type="SdfController" parent="."]
+blend_factor = 0.0
 mesh = SubResource("BoxMesh_h2yge")
 metadata/_edit_lock_ = true
 
