@@ -14,10 +14,11 @@ const POSITIONS: &str = "POSITIONS";
 const PROPERTIES: &str = "PROPERTIES";
 const COLORS: &str = "COLORS";
 
-const PLAYER_ID: usize = 0;
-
+#[allow(unused)]
 const FLAG_COLLISION: f32 = 0.0;
+#[allow(unused)]
 const FLAG_NO_COLLISION: f32 = 1.0;
+#[allow(unused)]
 const FLAG_NO_RENDER: f32 = 2.0;
 
 #[derive(GodotClass)]
@@ -56,19 +57,40 @@ impl IMeshInstance3D for SdfController {
       },
       blend_factor: 1.0,
       positions: PackedArray::from(&[
-        Vector4::new(0.0, 0.0, -1.5, FLAG_NO_COLLISION),
+        Vector4::new(0.0, 0.0, -1.5, FLAG_NO_RENDER),
         Vector4::new(0.0, -4.75, 0.0, FLAG_COLLISION),
         Vector4::new(0.0, -3.0, 0.0, FLAG_COLLISION),
+        Vector4::new(3.0, -2.0, 0.0, FLAG_COLLISION),
+        Vector4::new(0.0, 0.0, 0.0, 0.0),
+        Vector4::new(0.0, 0.0, 0.0, 0.0),
+        Vector4::new(0.0, 0.0, 0.0, 0.0),
+        Vector4::new(0.0, 0.0, 0.0, 0.0),
+        Vector4::new(0.0, 0.0, 0.0, 0.0),
+        Vector4::new(0.0, 0.0, 0.0, 0.0),
       ]),
       properties: PackedArray::from(&[
         Vector4::new(0.02, 0.0, 0.0, 1.0),
         Vector4::new(3.0, 0.0, 0.0, 1.0),
         Vector4::new(5.0, 0.5, 5.0, 2.0),
+        Vector4::new(1.0, 1.0, 5.0, 2.0),
+        Vector4::new(0.01, 0.0, 0.0, 1.0),
+        Vector4::new(0.01, 0.0, 0.0, 1.0),
+        Vector4::new(0.01, 0.0, 0.0, 1.0),
+        Vector4::new(0.01, 0.0, 0.0, 1.0),
+        Vector4::new(0.01, 0.0, 0.0, 1.0),
+        Vector4::new(0.01, 0.0, 0.0, 1.0),
       ]),
       colors: PackedArray::from(&[
         Vector4::new(1.0, 1.0, 1.0, 0.0),
         Vector4::new(1.0, 0.0, 0.0, 0.0),
         Vector4::new(0.0, 0.0, 1.0, 0.0),
+        Vector4::new(1.0, 1.0, 1.0, 1.0),
+        Vector4::new(1.0, 1.0, 1.0, 1.0),
+        Vector4::new(1.0, 1.0, 1.0, 1.0),
+        Vector4::new(1.0, 1.0, 1.0, 1.0),
+        Vector4::new(1.0, 1.0, 1.0, 1.0),
+        Vector4::new(1.0, 1.0, 1.0, 1.0),
+        Vector4::new(1.0, 1.0, 1.0, 1.0),
       ]),
       rendering_device,
     };
@@ -92,25 +114,25 @@ impl IMeshInstance3D for SdfController {
       self.background_color.h -= 1.0;
     }
 
-    let player = self.base().get_node_as::<Player>("Player");
+    let player = self.base().get_node_as::<Player>("../../Player");
 
-    let player_pos = {
-      let pos = player.bind().get_position();
-      Vector4::new(pos.x, pos.y, pos.z, FLAG_NO_COLLISION)
-    };
+    let player_collider = player.bind().get_points();
+    let collision_event = self.compute_collision(player_collider);
 
-    let collision = self.compute_collision(PackedArray::from([player_pos]));
-
-    if collision.w < 0.0 {
-      player.signals().collision().emit(collision);
+    if let Some(event) = collision_event {
+      player.signals().collision().emit(event);
     }
 
-    let player_pos = {
-      let pos = player.bind().get_position();
-      Vector4::new(pos.x, pos.y, pos.z, FLAG_NO_COLLISION)
-    };
-
-    self.positions[PLAYER_ID] = player_pos;
+    // {
+    //   let player_collider = player.bind().get_points();
+    //   self.positions[PLAYER_ID] = player_collider[0];
+    //   self.positions[4] = player_collider[1];
+    //   self.positions[5] = player_collider[2];
+    //   self.positions[6] = player_collider[3];
+    //   self.positions[7] = player_collider[4];
+    //   self.positions[8] = player_collider[5];
+    //   self.positions[9] = player_collider[6];
+    // }
 
     material.set_shader_parameter(BLEND_FACTOR, &self.blend_factor.to_variant());
     material.set_shader_parameter(BACKGROUND, &self.background_color.to_rgb().to_variant());
@@ -121,7 +143,7 @@ impl IMeshInstance3D for SdfController {
 }
 
 impl SdfController {
-  fn compute_collision(&mut self, points: PackedVector4Array) -> Vector4 {
+  fn compute_collision(&mut self, points: PackedVector4Array) -> Option<Vector4> {
     let shader_code = load::<RdShaderFile>(SHADER_PATH).get_spirv().unwrap();
     let collision_shader = self.rendering_device.shader_create_from_spirv(&shader_code);
 
@@ -210,10 +232,27 @@ impl SdfController {
     self.rendering_device.free_rid(point_buffer);
     self.rendering_device.free_rid(position_buffer);
     self.rendering_device.free_rid(property_buffer);
-    // self.rendering_device.free_rid(data_buffer);
+    self.rendering_device.free_rid(data_buffer);
     self.rendering_device.free_rid(pipeline);
     self.rendering_device.free_rid(collision_shader);
 
-    return Vector4::new(output[0], output[1], output[2], output[3]);
+    let mut event = Vector4::ZERO;
+    let mut highest_depth = 0.0;
+    for i in 0..(output.len() / 4) {
+      if output[i * 4 + 3] < 0.0 && output[i * 4 + 3] < highest_depth {
+        highest_depth = output[i * 4 + 3];
+        event = Vector4::new(
+          output[i * 4 + 0],
+          output[i * 4 + 1],
+          output[i * 4 + 2],
+          output[i * 4 + 3],
+        );
+      }
+    }
+
+    if highest_depth < 0.0 {
+      return Some(event);
+    }
+    return None;
   }
 }

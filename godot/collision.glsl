@@ -1,7 +1,7 @@
 #[compute]
 #version 450
 
-const int NUM_SHAPES = 3;
+const int NUM_SHAPES = 10;
 const float EPSILON = 0.01;
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;

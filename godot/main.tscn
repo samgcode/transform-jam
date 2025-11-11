@@ -2,31 +2,34 @@
 
 [ext_resource type="Shader" uid="uid://bm2ejfxs6w5nx" path="res://sdf_renderer.gdshader" id="1_ig7tw"]
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_0xm2m"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ig7tw"]
 render_priority = 0
 shader = ExtResource("1_ig7tw")
 shader_parameter/MAX_STEPS = 100
 shader_parameter/MAX_DIST = 100.0
 shader_parameter/SURF_DIST = 0.01
-shader_parameter/BLEND_FACTOR = 0.62400002964
+shader_parameter/BLEND_FACTOR = 1.0
 shader_parameter/BACKGROUND_COLOR = Color(0, 0, 0, 1)
 shader_parameter/POSITIONS = PackedVector4Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 shader_parameter/PROPERTIES = PackedVector4Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 shader_parameter/COLORS = PackedVector3Array(0, 0, 0, 0, 0, 0, 0, 0, 0)
 
-[sub_resource type="BoxMesh" id="BoxMesh_h2yge"]
-material = SubResource("ShaderMaterial_0xm2m")
+[sub_resource type="SphereMesh" id="SphereMesh_0xm2m"]
+material = SubResource("ShaderMaterial_ig7tw")
 flip_faces = true
-size = Vector3(10, 10, 10)
+radius = 5.0
+height = 10.0
 
 [node name="Node3D" type="Node3D"]
 
-[node name="SdfController" type="SdfController" parent="."]
-blend_factor = 0.0
-mesh = SubResource("BoxMesh_h2yge")
-metadata/_edit_lock_ = true
+[node name="Player" type="Player" parent="."]
 
-[node name="Player" type="Player" parent="SdfController"]
-
-[node name="Camera" type="Camera3D" parent="SdfController/Player"]
+[node name="Camera" type="Camera3D" parent="Player"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+
+[node name="SdfController" type="SdfController" parent="Player"]
+blend_factor = 0.5
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.425, 0)
+mesh = SubResource("SphereMesh_0xm2m")
+skeleton = NodePath("../..")
+metadata/_edit_lock_ = true

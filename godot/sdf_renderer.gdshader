@@ -1,7 +1,7 @@
 shader_type spatial;
 render_mode unshaded, depth_test_disabled;
 
-const int MAX_SHAPES = 3;
+const int MAX_SHAPES = 10;
 
 uniform int MAX_STEPS = 100;
 uniform float MAX_DIST = 100.0;
@@ -60,9 +60,6 @@ vec4 get_scene_info(vec3 point) {
 		vec3 color = COLORS[i];
 		float dist = shape_dist(point, POSITIONS[i].xyz, PROPERTIES[i]);
 
-		// if(dist < output_info.w) {
-		// 	output_info = vec4(color.rgb, dist);
-		// }
 		output_info = smoothUnion(output_info, vec4(color.rgb, dist), BLEND_FACTOR);
 	}
 	return output_info;

@@ -22,6 +22,8 @@ const GRAVITY: Vector3 = Vector3 {
   z: 0.0,
 };
 
+const NUM_POINTS: usize = 6;
+
 #[derive(GodotClass)]
 #[class(base = Node3D)]
 pub struct Player {
@@ -31,6 +33,7 @@ pub struct Player {
   velocity: Vector3,
   mouse_captured: bool,
   look_rotation: Vector2,
+  grounded: bool,
 }
 
 #[godot_api]
@@ -42,6 +45,7 @@ impl INode3D for Player {
       velocity: Vector3::new(0.0, -0.5, 0.0),
       mouse_captured: false,
       look_rotation: Vector2::new(0.0, 0.0),
+      grounded: false,
     };
   }
 
@@ -85,7 +89,10 @@ impl INode3D for Player {
     }
 
     if Input::singleton().is_action_just_pressed(JUMP) {
-      self.velocity.y += JUMP_HEIGHT;
+      if self.grounded {
+        self.velocity.y += JUMP_HEIGHT;
+        self.grounded = false;
+      }
     }
 
     self.velocity += GRAVITY;
@@ -110,19 +117,67 @@ impl INode3D for Player {
   }
 }
 
+const Y_AXIS: Vector3 = Vector3 {
+  x: 0.0,
+  y: 1.0,
+  z: 0.0,
+};
+
 impl Player {
   pub fn on_collision(&mut self, collision: Vector4) {
     let normal = Vector3::new(collision.x, collision.y, collision.z).normalized();
 
-    let parallel = Vector3::dot(self.velocity, normal) * normal;
-    let perpendicular: Vector3 = self.velocity - parallel;
+    let verticality = normal.dot(Y_AXIS);
+    // godot_print!(
+    //   "{:.4}, {:.4}, {:.4}, [{:.4}]",
+    //   normal.x,
+    //   normal.y,
+    //   normal.z,
+    //   verticality
+    // );
+
+    // let parallel = self.velocity.dot(normal) * normal;
+    // let perpendicular: Vector3 = self.velocity - parallel;
+
+    let vertical = self.velocity.dot(Y_AXIS) * Y_AXIS;
+    let horizontal: Vector3 = self.velocity - vertical;
 
     self.add_position(normal * -collision.w);
-    self.velocity = perpendicular * 0.1;
+
+    if verticality < 0.0 {
+      // roof
+      self.velocity = horizontal;
+    } else if verticality < 0.5 {
+      // wall
+      self.velocity = vertical;
+    } else {
+      // floor
+      self.velocity = horizontal * 0.1;
+
+      self.grounded = true;
+    }
   }
 
   pub fn get_position(&self) -> Vector3 {
     return self.base().get_transform().origin;
+  }
+
+  pub fn get_points(&self) -> PackedVector4Array {
+    let pos = self.get_position();
+    let feet = Vector4::new(pos.x, pos.y, pos.z, 1.0);
+
+    let mut points = PackedVector4Array::from(vec![feet]);
+
+    for i in 0..NUM_POINTS {
+      let angle = i as f32 * (std::f32::consts::TAU / NUM_POINTS as f32);
+      let x = angle.sin() * 0.1;
+      let y = angle.cos() * 0.1;
+      points.push(Vector4::new(x, 0.5, y, 0.0) + feet);
+      points.push(Vector4::new(x, 0.3, y, 0.0) + feet);
+      points.push(Vector4::new(x, 0.0, y, 0.0) + feet);
+    }
+
+    return points;
   }
 
   pub fn add_position(&mut self, offset: Vector3) {
