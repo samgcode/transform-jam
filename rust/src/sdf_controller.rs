@@ -253,7 +253,7 @@ impl SdfController {
     return None;
   }
 
-  fn new_shape(
+  pub fn new_shape(
     &mut self,
     position: Vector4,
     properties: Vector4,
@@ -278,7 +278,7 @@ impl SdfController {
     return Err("Cannot allocate new shape, no shape slot available");
   }
 
-  fn update_shape(
+  pub fn update_shape(
     &mut self,
     address: usize,
     position: Vector4,
@@ -289,10 +289,9 @@ impl SdfController {
     self.properties[address] = properties;
     self.colors[address] = color;
     self.shapes_used[address] = false;
-    self.num_shapes -= 1;
   }
 
-  fn remove_shape(&mut self, address: usize) {
+  pub fn remove_shape(&mut self, address: usize) {
     self.positions[address] = Vector4::ZERO;
     self.properties[address] = Vector4::ZERO;
     self.colors[address] = Vector4::ZERO;

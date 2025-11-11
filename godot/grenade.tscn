@@ -1,0 +1,3 @@
+[gd_scene format=3 uid="uid://c462mqid2ly1k"]
+
+[node name="Grenade" type="Grenade"]

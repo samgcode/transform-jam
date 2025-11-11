@@ -5,16 +5,22 @@ use godot::{
 };
 use std::ops::Mul;
 
+use crate::{grenade::Grenade, sdf_controller::SdfController};
+
 const MOVE_FORWARD: &str = "move_forward";
 const MOVE_BACK: &str = "move_back";
 const MOVE_LEFT: &str = "move_left";
 const MOVE_RIGHT: &str = "move_right";
+const INPUT_THROW: &str = "throw";
+// const INPUT_SWAP: &str = "swap";
 
 const JUMP: &str = "jump";
 
 const SPEED: f32 = 2.0;
 const JUMP_HEIGHT: f32 = 2.0;
 const LOOK_SPEED: f32 = 0.002;
+
+const GRENADE_SPEED: f32 = 5.0;
 
 const GRAVITY: Vector3 = Vector3 {
   x: 0.0,
@@ -34,6 +40,8 @@ pub struct Player {
   mouse_captured: bool,
   look_rotation: Vector2,
   grounded: bool,
+
+  grenade_scene: Gd<PackedScene>,
 }
 
 #[godot_api]
@@ -46,11 +54,29 @@ impl INode3D for Player {
       mouse_captured: false,
       look_rotation: Vector2::new(0.0, 0.0),
       grounded: false,
+      grenade_scene: load::<PackedScene>("res://grenade.tscn"),
     };
   }
 
   fn ready(&mut self) {
     self.signals().collision().connect_self(Self::on_collision);
+  }
+
+  fn unhandled_input(&mut self, event: Gd<InputEvent>) {
+    if Input::singleton().is_mouse_button_pressed(MouseButton::LEFT) {
+      Input::singleton().set_mouse_mode(MouseMode::CAPTURED);
+      self.mouse_captured = true;
+    } else if Input::singleton().is_key_pressed(Key::ESCAPE) {
+      Input::singleton().set_mouse_mode(MouseMode::VISIBLE);
+      self.mouse_captured = false;
+    }
+
+    if self.mouse_captured {
+      let mouse_event = event.try_cast::<InputEventMouseMotion>();
+      if let Ok(mouse_event) = mouse_event {
+        self.rotate_camera(mouse_event.get_relative());
+      }
+    }
   }
 
   fn physics_process(&mut self, dt: f64) {
@@ -97,22 +123,22 @@ impl INode3D for Player {
 
     self.velocity += GRAVITY;
     self.add_position(self.velocity * dt as f32);
-  }
 
-  fn unhandled_input(&mut self, event: Gd<InputEvent>) {
-    if Input::singleton().is_mouse_button_pressed(MouseButton::LEFT) {
-      Input::singleton().set_mouse_mode(MouseMode::CAPTURED);
-      self.mouse_captured = true;
-    } else if Input::singleton().is_key_pressed(Key::ESCAPE) {
-      Input::singleton().set_mouse_mode(MouseMode::VISIBLE);
-      self.mouse_captured = false;
-    }
+    if Input::singleton().is_action_just_pressed(INPUT_THROW) {
+      let mut grenade = self.grenade_scene.instantiate_as::<Grenade>();
 
-    if self.mouse_captured {
-      let mouse_event = event.try_cast::<InputEventMouseMotion>();
-      if let Ok(mouse_event) = mouse_event {
-        self.rotate_camera(mouse_event.get_relative());
-      }
+      let camera = self.base().get_node_as::<Node3D>("Camera");
+      let renderer = self.base().get_node_as::<SdfController>("SdfController");
+
+      let direction = -camera.get_global_basis().col_c().normalized();
+
+      grenade.bind_mut().initialize(
+        self.get_position() + Vector3::new(0.0, 0.4, 0.0) + direction * 0.4,
+        direction * GRENADE_SPEED,
+        renderer,
+      );
+
+      self.base_mut().add_child(&grenade);
     }
   }
 }
@@ -128,14 +154,6 @@ impl Player {
     let normal = Vector3::new(collision.x, collision.y, collision.z).normalized();
 
     let verticality = normal.dot(Y_AXIS);
-    // godot_print!(
-    //   "{:.4}, {:.4}, {:.4}, [{:.4}]",
-    //   normal.x,
-    //   normal.y,
-    //   normal.z,
-    //   verticality
-    // );
-
     // let parallel = self.velocity.dot(normal) * normal;
     // let perpendicular: Vector3 = self.velocity - parallel;
 
