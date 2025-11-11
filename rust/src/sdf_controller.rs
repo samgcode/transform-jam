@@ -8,6 +8,8 @@ use godot::prelude::*;
 
 const SHADER_PATH: &str = "res://collision.glsl";
 
+const MAX_SHAPES: usize = 10;
+
 const BLEND_FACTOR: &str = "BLEND_FACTOR";
 const BACKGROUND: &str = "BACKGROUND_COLOR";
 const POSITIONS: &str = "POSITIONS";
@@ -32,12 +34,12 @@ pub struct SdfController {
   rendering_device: Gd<RenderingDevice>,
 
   background_color: ColorHsv,
-  #[export]
   positions: PackedVector4Array,
-  #[export]
   properties: PackedVector4Array,
-  #[export]
   colors: PackedVector4Array,
+
+  num_shapes: usize,
+  shapes_used: [bool; MAX_SHAPES],
 }
 
 #[godot_api]
@@ -56,44 +58,39 @@ impl IMeshInstance3D for SdfController {
         a: 1.0,
       },
       blend_factor: 1.0,
-      positions: PackedArray::from(&[
-        Vector4::new(0.0, 0.0, -1.5, FLAG_NO_RENDER),
-        Vector4::new(0.0, -4.75, 0.0, FLAG_COLLISION),
-        Vector4::new(0.0, -3.0, 0.0, FLAG_COLLISION),
-        Vector4::new(3.0, -2.0, 0.0, FLAG_COLLISION),
-        Vector4::new(0.0, 0.0, 0.0, 0.0),
-        Vector4::new(0.0, 0.0, 0.0, 0.0),
-        Vector4::new(0.0, 0.0, 0.0, 0.0),
-        Vector4::new(0.0, 0.0, 0.0, 0.0),
-        Vector4::new(0.0, 0.0, 0.0, 0.0),
-        Vector4::new(0.0, 0.0, 0.0, 0.0),
-      ]),
-      properties: PackedArray::from(&[
-        Vector4::new(0.02, 0.0, 0.0, 1.0),
-        Vector4::new(3.0, 0.0, 0.0, 1.0),
-        Vector4::new(5.0, 0.5, 5.0, 2.0),
-        Vector4::new(1.0, 1.0, 5.0, 2.0),
-        Vector4::new(0.01, 0.0, 0.0, 1.0),
-        Vector4::new(0.01, 0.0, 0.0, 1.0),
-        Vector4::new(0.01, 0.0, 0.0, 1.0),
-        Vector4::new(0.01, 0.0, 0.0, 1.0),
-        Vector4::new(0.01, 0.0, 0.0, 1.0),
-        Vector4::new(0.01, 0.0, 0.0, 1.0),
-      ]),
-      colors: PackedArray::from(&[
-        Vector4::new(1.0, 1.0, 1.0, 0.0),
-        Vector4::new(1.0, 0.0, 0.0, 0.0),
-        Vector4::new(0.0, 0.0, 1.0, 0.0),
-        Vector4::new(1.0, 1.0, 1.0, 1.0),
-        Vector4::new(1.0, 1.0, 1.0, 1.0),
-        Vector4::new(1.0, 1.0, 1.0, 1.0),
-        Vector4::new(1.0, 1.0, 1.0, 1.0),
-        Vector4::new(1.0, 1.0, 1.0, 1.0),
-        Vector4::new(1.0, 1.0, 1.0, 1.0),
-        Vector4::new(1.0, 1.0, 1.0, 1.0),
-      ]),
+      positions: PackedArray::from([Vector4::ZERO; MAX_SHAPES]),
+      properties: PackedArray::from([Vector4::ZERO; MAX_SHAPES]),
+      colors: PackedArray::from([Vector4::ZERO; MAX_SHAPES]),
+      num_shapes: 0,
+      shapes_used: [false; MAX_SHAPES],
       rendering_device,
     };
+  }
+
+  fn ready(&mut self) {
+    let _ = self.new_shape(
+      Vector4::new(0.0, 0.0, -1.5, FLAG_NO_RENDER),
+      Vector4::new(0.02, 0.0, 0.0, 1.0),
+      Vector4::new(1.0, 1.0, 1.0, 0.0),
+    );
+
+    let _ = self.new_shape(
+      Vector4::new(0.0, -4.75, 0.0, FLAG_COLLISION),
+      Vector4::new(3.0, 0.0, 0.0, 1.0),
+      Vector4::new(1.0, 0.0, 0.0, 0.0),
+    );
+
+    let _ = self.new_shape(
+      Vector4::new(0.0, -3.0, 0.0, FLAG_COLLISION),
+      Vector4::new(5.0, 0.5, 5.0, 2.0),
+      Vector4::new(0.0, 0.0, 1.0, 0.0),
+    );
+
+    let _ = self.new_shape(
+      Vector4::new(3.0, -2.0, 0.0, FLAG_COLLISION),
+      Vector4::new(1.0, 1.0, 5.0, 2.0),
+      Vector4::new(1.0, 1.0, 1.0, 1.0),
+    );
   }
 
   fn physics_process(&mut self, dt: f64) {
@@ -254,5 +251,52 @@ impl SdfController {
       return Some(event);
     }
     return None;
+  }
+
+  fn new_shape(
+    &mut self,
+    position: Vector4,
+    properties: Vector4,
+    color: Vector4,
+  ) -> Result<usize, &'static str> {
+    if self.num_shapes == MAX_SHAPES {
+      return Err("Cannot allocate new shape, maximum amount of shapes allocated");
+    }
+
+    for i in 0..MAX_SHAPES {
+      if !self.shapes_used[i] {
+        self.positions[i] = position;
+        self.properties[i] = properties;
+        self.colors[i] = color;
+        self.shapes_used[i] = true;
+        self.num_shapes += 1;
+
+        return Ok(i);
+      }
+    }
+
+    return Err("Cannot allocate new shape, no shape slot available");
+  }
+
+  fn update_shape(
+    &mut self,
+    address: usize,
+    position: Vector4,
+    properties: Vector4,
+    color: Vector4,
+  ) {
+    self.positions[address] = position;
+    self.properties[address] = properties;
+    self.colors[address] = color;
+    self.shapes_used[address] = false;
+    self.num_shapes -= 1;
+  }
+
+  fn remove_shape(&mut self, address: usize) {
+    self.positions[address] = Vector4::ZERO;
+    self.properties[address] = Vector4::ZERO;
+    self.colors[address] = Vector4::ZERO;
+    self.shapes_used[address] = false;
+    self.num_shapes -= 1;
   }
 }
