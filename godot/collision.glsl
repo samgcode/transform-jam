@@ -59,7 +59,7 @@ float get_scene_dist(vec3 point) {
 	float output_dist = 100.0;
 
 	for(int i = 0; i < NUM_SHAPES; i++) {
-		if(property_buffer.properties[i].w == 0.0 || position_buffer.positions[i].w == 1.0) continue;
+		if(property_buffer.properties[i].w == 0.0 || position_buffer.positions[i].w >= 1.0) continue;
 		
 		float dist = shape_dist(point, position_buffer.positions[i].xyz, property_buffer.properties[i]);
 

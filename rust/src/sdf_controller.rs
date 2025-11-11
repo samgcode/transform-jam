@@ -15,11 +15,10 @@ const PROPERTIES: &str = "PROPERTIES";
 const COLORS: &str = "COLORS";
 
 const PLAYER_ID: usize = 0;
-const GRAVITY: Vector3 = Vector3 {
-  x: 0.0,
-  y: -0.05,
-  z: 0.0,
-};
+
+const FLAG_COLLISION: f32 = 0.0;
+const FLAG_NO_COLLISION: f32 = 1.0;
+const FLAG_NO_RENDER: f32 = 2.0;
 
 #[derive(GodotClass)]
 #[class(base = MeshInstance3D)]
@@ -29,6 +28,7 @@ pub struct SdfController {
 
   #[export]
   blend_factor: f32,
+  rendering_device: Gd<RenderingDevice>,
 
   background_color: ColorHsv,
   #[export]
@@ -37,10 +37,6 @@ pub struct SdfController {
   properties: PackedVector4Array,
   #[export]
   colors: PackedVector4Array,
-
-  player: Player,
-
-  rendering_device: Gd<RenderingDevice>,
 }
 
 #[godot_api]
@@ -60,9 +56,9 @@ impl IMeshInstance3D for SdfController {
       },
       blend_factor: 1.0,
       positions: PackedArray::from(&[
-        Vector4::new(0.0, 0.0, -1.5, 1.0),
-        Vector4::new(0.0, -4.75, 0.0, 0.0),
-        Vector4::new(0.0, -3.0, 0.0, 0.0),
+        Vector4::new(0.0, 0.0, -1.5, FLAG_NO_COLLISION),
+        Vector4::new(0.0, -4.75, 0.0, FLAG_COLLISION),
+        Vector4::new(0.0, -3.0, 0.0, FLAG_COLLISION),
       ]),
       properties: PackedArray::from(&[
         Vector4::new(0.02, 0.0, 0.0, 1.0),
@@ -74,7 +70,6 @@ impl IMeshInstance3D for SdfController {
         Vector4::new(1.0, 0.0, 0.0, 0.0),
         Vector4::new(0.0, 0.0, 1.0, 0.0),
       ]),
-      player: Player::init(),
       rendering_device,
     };
   }
@@ -97,27 +92,23 @@ impl IMeshInstance3D for SdfController {
       self.background_color.h -= 1.0;
     }
 
-    self.player.update(dt as f32, GRAVITY);
+    let player = self.base().get_node_as::<Player>("Player");
 
-    let player_pos = Vector4::new(
-      self.player.position.x,
-      self.player.position.y,
-      self.player.position.z,
-      1.0,
-    );
+    let player_pos = {
+      let pos = player.bind().get_position();
+      Vector4::new(pos.x, pos.y, pos.z, FLAG_NO_COLLISION)
+    };
 
     let collision = self.compute_collision(PackedArray::from([player_pos]));
 
     if collision.w < 0.0 {
-      self.player.on_collision(collision, dt as f32);
+      player.signals().collision().emit(collision);
     }
 
-    let player_pos = Vector4::new(
-      self.player.position.x,
-      self.player.position.y,
-      self.player.position.z,
-      1.0,
-    );
+    let player_pos = {
+      let pos = player.bind().get_position();
+      Vector4::new(pos.x, pos.y, pos.z, FLAG_NO_COLLISION)
+    };
 
     self.positions[PLAYER_ID] = player_pos;
 
