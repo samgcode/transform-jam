@@ -1,4 +1,4 @@
-use crate::game_controller::GameController;
+// use crate::game_controller::GameController;
 use godot::classes::rendering_device::UniformType;
 use godot::classes::{
   IMeshInstance3D, MeshInstance3D, RdShaderFile, RdUniform, RenderingDevice, RenderingServer,
@@ -120,7 +120,7 @@ impl IMeshInstance3D for SdfController {
 }
 
 impl SdfController {
-  pub fn compute_collision(&mut self, points: PackedVector4Array) -> Option<Vector4> {
+  pub fn compute_collision(&mut self, points: PackedVector4Array) -> Vec<Vector4> {
     let shader_code = load::<RdShaderFile>(SHADER_PATH).get_spirv().unwrap();
     let collision_shader = self.rendering_device.shader_create_from_spirv(&shader_code);
 
@@ -213,24 +213,16 @@ impl SdfController {
     self.rendering_device.free_rid(pipeline);
     self.rendering_device.free_rid(collision_shader);
 
-    let mut event = Vector4::ZERO;
-    let mut highest_depth = 0.0;
+    let mut events = Vec::new();
     for i in 0..(output.len() / 4) {
-      if output[i * 4 + 3] < 0.0 && output[i * 4 + 3] < highest_depth {
-        highest_depth = output[i * 4 + 3];
-        event = Vector4::new(
-          output[i * 4 + 0],
-          output[i * 4 + 1],
-          output[i * 4 + 2],
-          output[i * 4 + 3],
-        );
-      }
+      events.push(Vector4::new(
+        output[i * 4 + 0],
+        output[i * 4 + 1],
+        output[i * 4 + 2],
+        output[i * 4 + 3],
+      ));
     }
-
-    if highest_depth < 0.0 {
-      return Some(event.clone());
-    }
-    return None;
+    return events;
   }
 
   pub fn new_shape(
@@ -282,11 +274,11 @@ impl SdfController {
     self.num_shapes -= 1;
   }
 
-  fn game_controller(&mut self) -> Gd<GameController> {
-    return self
-      .base_mut()
-      .get_parent()
-      .unwrap()
-      .cast::<GameController>();
-  }
+  // fn game_controller(&mut self) -> Gd<GameController> {
+  //   return self
+  //     .base_mut()
+  //     .get_parent()
+  //     .unwrap()
+  //     .cast::<GameController>();
+  // }
 }

@@ -1,7 +1,5 @@
 use godot::prelude::*;
 
-use crate::game_controller::GameController;
-
 pub const PROPERTIES: Vector4 = Vector4 {
   x: 0.01,
   y: 0.0,
@@ -23,7 +21,9 @@ pub struct Grenade {
   base: Base<Node3D>,
 
   velocity: Vector3,
-  grenade_id: i32,
+  pub grenade_id: i32,
+  pub exploded: bool,
+  destroyed: bool,
 }
 
 #[godot_api]
@@ -33,7 +33,13 @@ impl INode3D for Grenade {
       base,
       velocity: Vector3::ZERO,
       grenade_id: 0,
+      exploded: false,
+      destroyed: false,
     };
+  }
+
+  fn ready(&mut self) {
+    self.signals().collision().connect_self(Self::on_collision);
   }
 
   fn physics_process(&mut self, dt: f64) {
@@ -41,14 +47,12 @@ impl INode3D for Grenade {
 
     let position = self.base().get_transform().origin;
 
-    if position.length() > 5.0 {
-      self
-        .game_controller()
-        .signals()
-        .remove_grenade()
-        .emit(self.grenade_id);
-
+    if self.destroyed {
       self.base_mut().queue_free();
+    }
+
+    if position.length() > 5.0 {
+      self.exploded = true;
       return;
     }
   }
@@ -71,11 +75,17 @@ impl Grenade {
     return self.base().get_transform().origin;
   }
 
-  fn game_controller(&mut self) -> Gd<GameController> {
-    return self
-      .base_mut()
-      .get_parent()
-      .unwrap()
-      .cast::<GameController>();
+  fn on_collision(&mut self, _collision: Vector4) {
+    self.exploded = true;
   }
+
+  pub fn destroy(&mut self) {
+    self.destroyed = true;
+  }
+}
+
+#[godot_api]
+impl Grenade {
+  #[signal]
+  pub fn collision(collision: Vector4);
 }

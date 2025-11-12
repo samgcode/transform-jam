@@ -51,33 +51,68 @@ impl INode3D for GameController {
     let mut sdf_controller = self.sdf_controller();
 
     let player_collider = player.bind().get_points();
-    let collision_event = self
+    let collision_events = self
       .sdf_controller()
       .bind_mut()
       .compute_collision(player_collider);
 
-    if let Some(event) = collision_event {
-      player.signals().collision().emit(event);
+    let mut highest_depth = 0.0;
+    let mut collision = Vector4::ZERO;
+    for i in 0..collision_events.len() {
+      if collision_events[i].w < highest_depth {
+        highest_depth = collision.w;
+        collision = collision_events[i];
+      }
+    }
+
+    if collision != Vector4::ZERO {
+      player.signals().collision().emit(collision);
+    }
+
+    if self.grenades.len() > 0 {
+      let grenade_colliders = self.get_grenade_colliders();
+      let collision_events = self
+        .sdf_controller()
+        .bind_mut()
+        .compute_collision(grenade_colliders);
+
+      for i in 0..self.grenades.len() {
+        if collision_events[i].w < 0.0 {
+          self.grenades[i]
+            .1
+            .signals()
+            .collision()
+            .emit(collision_events[i]);
+        }
+      }
     }
 
     let mut transform = sdf_controller.get_transform();
     transform.origin = player.get_transform().origin;
     sdf_controller.set_transform(transform);
+    for i in 0..self.grenades.len() {
+      if i >= self.grenades.len() {
+        break;
+      }
 
-    self.grenades.iter().for_each(|(i, grenade)| {
-      let position = grenade.bind().get_position();
-      sdf_controller.bind_mut().update_shape(
-        i.clone(),
-        Vector4::new(
-          position.x,
-          position.y,
-          position.z,
-          sdf_controller::FLAG_NO_COLLISION,
-        ),
-        grenade::PROPERTIES,
-        grenade::COLOR,
-      );
-    });
+      let (i, grenade) = self.grenades[i].clone();
+      if grenade.bind().exploded {
+        self.on_remove_grenade(i as i32);
+      } else {
+        let position: Vector3 = grenade.bind().get_position();
+        sdf_controller.bind_mut().update_shape(
+          i.clone(),
+          Vector4::new(
+            position.x,
+            position.y,
+            position.z,
+            sdf_controller::FLAG_NO_COLLISION,
+          ),
+          grenade::PROPERTIES,
+          grenade::COLOR,
+        );
+      }
+    }
   }
 }
 
@@ -107,17 +142,33 @@ impl GameController {
   fn on_remove_grenade(&mut self, grenade_id: i32) {
     let mut sdf_controller = self.sdf_controller();
 
-    let mut id = 0;
     let mut remove_id = 0;
-    self.grenades.iter().for_each(|(i, _)| {
-      if i.clone() == grenade_id as usize {
-        sdf_controller.bind_mut().remove_shape(i.clone());
-        remove_id = id;
+    for i in 0..self.grenades.len() {
+      let (id, mut grenade) = self.grenades[i].clone();
+
+      if id.clone() == grenade_id as usize {
+        sdf_controller.bind_mut().remove_shape(id.clone());
+        remove_id = i;
+        grenade.bind_mut().destroy();
       }
-      id += 1;
-    });
+    }
 
     self.grenades.remove(remove_id);
+  }
+
+  fn get_grenade_colliders(&mut self) -> PackedVector4Array {
+    let mut colliders = PackedVector4Array::new();
+    self.grenades.iter().for_each(|(_, grenade)| {
+      let position = grenade.bind().get_position();
+      colliders.push(Vector4::new(
+        position.x,
+        position.y,
+        position.z,
+        sdf_controller::FLAG_NO_COLLISION,
+      ));
+    });
+
+    return colliders;
   }
 
   fn player(&mut self) -> Gd<Player> {
