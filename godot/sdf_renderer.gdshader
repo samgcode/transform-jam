@@ -1,7 +1,7 @@
 shader_type spatial;
 render_mode unshaded, depth_test_disabled;
 
-const int MAX_SHAPES = 10;
+const int MAX_SHAPES = 100;
 
 uniform int MAX_STEPS = 100;
 uniform float MAX_DIST = 100.0;

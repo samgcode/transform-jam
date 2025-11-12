@@ -1,4 +1,4 @@
-use crate::player::Player;
+use crate::game_controller::GameController;
 use godot::classes::rendering_device::UniformType;
 use godot::classes::{
   IMeshInstance3D, MeshInstance3D, RdShaderFile, RdUniform, RenderingDevice, RenderingServer,
@@ -8,7 +8,7 @@ use godot::prelude::*;
 
 const SHADER_PATH: &str = "res://collision.glsl";
 
-const MAX_SHAPES: usize = 10;
+const MAX_SHAPES: usize = 100;
 
 const BLEND_FACTOR: &str = "BLEND_FACTOR";
 const BACKGROUND: &str = "BACKGROUND_COLOR";
@@ -17,11 +17,11 @@ const PROPERTIES: &str = "PROPERTIES";
 const COLORS: &str = "COLORS";
 
 #[allow(unused)]
-const FLAG_COLLISION: f32 = 0.0;
+pub const FLAG_COLLISION: f32 = 0.0;
 #[allow(unused)]
-const FLAG_NO_COLLISION: f32 = 1.0;
+pub const FLAG_NO_COLLISION: f32 = 1.0;
 #[allow(unused)]
-const FLAG_NO_RENDER: f32 = 2.0;
+pub const FLAG_NO_RENDER: f32 = 2.0;
 
 #[derive(GodotClass)]
 #[class(base = MeshInstance3D)]
@@ -111,26 +111,6 @@ impl IMeshInstance3D for SdfController {
       self.background_color.h -= 1.0;
     }
 
-    let player = self.base().get_node_as::<Player>("../../Player");
-
-    let player_collider = player.bind().get_points();
-    let collision_event = self.compute_collision(player_collider);
-
-    if let Some(event) = collision_event {
-      player.signals().collision().emit(event);
-    }
-
-    // {
-    //   let player_collider = player.bind().get_points();
-    //   self.positions[PLAYER_ID] = player_collider[0];
-    //   self.positions[4] = player_collider[1];
-    //   self.positions[5] = player_collider[2];
-    //   self.positions[6] = player_collider[3];
-    //   self.positions[7] = player_collider[4];
-    //   self.positions[8] = player_collider[5];
-    //   self.positions[9] = player_collider[6];
-    // }
-
     material.set_shader_parameter(BLEND_FACTOR, &self.blend_factor.to_variant());
     material.set_shader_parameter(BACKGROUND, &self.background_color.to_rgb().to_variant());
     material.set_shader_parameter(POSITIONS, &self.positions.to_variant());
@@ -140,7 +120,7 @@ impl IMeshInstance3D for SdfController {
 }
 
 impl SdfController {
-  fn compute_collision(&mut self, points: PackedVector4Array) -> Option<Vector4> {
+  pub fn compute_collision(&mut self, points: PackedVector4Array) -> Option<Vector4> {
     let shader_code = load::<RdShaderFile>(SHADER_PATH).get_spirv().unwrap();
     let collision_shader = self.rendering_device.shader_create_from_spirv(&shader_code);
 
@@ -248,7 +228,7 @@ impl SdfController {
     }
 
     if highest_depth < 0.0 {
-      return Some(event);
+      return Some(event.clone());
     }
     return None;
   }
@@ -288,14 +268,25 @@ impl SdfController {
     self.positions[address] = position;
     self.properties[address] = properties;
     self.colors[address] = color;
-    self.shapes_used[address] = false;
   }
 
   pub fn remove_shape(&mut self, address: usize) {
+    if !self.shapes_used[address] {
+      panic!("Shape double free");
+    }
+
     self.positions[address] = Vector4::ZERO;
     self.properties[address] = Vector4::ZERO;
     self.colors[address] = Vector4::ZERO;
     self.shapes_used[address] = false;
     self.num_shapes -= 1;
+  }
+
+  fn game_controller(&mut self) -> Gd<GameController> {
+    return self
+      .base_mut()
+      .get_parent()
+      .unwrap()
+      .cast::<GameController>();
   }
 }

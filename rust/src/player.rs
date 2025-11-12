@@ -5,7 +5,7 @@ use godot::{
 };
 use std::ops::Mul;
 
-use crate::{grenade::Grenade, sdf_controller::SdfController};
+use crate::game_controller::GameController;
 
 const MOVE_FORWARD: &str = "move_forward";
 const MOVE_BACK: &str = "move_back";
@@ -40,8 +40,6 @@ pub struct Player {
   mouse_captured: bool,
   look_rotation: Vector2,
   grounded: bool,
-
-  grenade_scene: Gd<PackedScene>,
 }
 
 #[godot_api]
@@ -49,12 +47,10 @@ impl INode3D for Player {
   fn init(base: Base<Node3D>) -> Self {
     return Self {
       base,
-
       velocity: Vector3::new(0.0, -0.5, 0.0),
       mouse_captured: false,
       look_rotation: Vector2::new(0.0, 0.0),
       grounded: false,
-      grenade_scene: load::<PackedScene>("res://grenade.tscn"),
     };
   }
 
@@ -125,20 +121,14 @@ impl INode3D for Player {
     self.add_position(self.velocity * dt as f32);
 
     if Input::singleton().is_action_just_pressed(INPUT_THROW) {
-      let mut grenade = self.grenade_scene.instantiate_as::<Grenade>();
-
       let camera = self.base().get_node_as::<Node3D>("Camera");
-      let renderer = self.base().get_node_as::<SdfController>("SdfController");
 
       let direction = -camera.get_global_basis().col_c().normalized();
 
-      grenade.bind_mut().initialize(
+      self.game_controller().signals().spawn_grenade().emit(
         self.get_position() + Vector3::new(0.0, 0.4, 0.0) + direction * 0.4,
         direction * GRENADE_SPEED,
-        renderer,
       );
-
-      self.base_mut().add_child(&grenade);
     }
   }
 }
@@ -205,7 +195,7 @@ impl Player {
   }
 
   fn rotate_camera(&mut self, input: Vector2) {
-    let mut camera = self.base().get_node_as::<Node3D>("Camera");
+    let mut camera: Gd<Node3D> = self.camera();
 
     self.look_rotation.x = (self.look_rotation.x - input.y * LOOK_SPEED)
       .clamp(f32::to_radians(-85.0), f32::to_radians(85.0));
@@ -216,6 +206,18 @@ impl Player {
       .base_mut()
       .set_basis(Basis::IDENTITY.rotated(Vector3::new(0.0, 1.0, 0.0), new_y));
     camera.set_basis(Basis::IDENTITY.rotated(Vector3::new(1.0, 0.0, 0.0), self.look_rotation.x));
+  }
+
+  fn game_controller(&mut self) -> Gd<GameController> {
+    return self
+      .base_mut()
+      .get_parent()
+      .unwrap()
+      .cast::<GameController>();
+  }
+
+  fn camera(&mut self) -> Gd<Node3D> {
+    return self.base_mut().get_node_as::<Node3D>("Camera");
   }
 }
 

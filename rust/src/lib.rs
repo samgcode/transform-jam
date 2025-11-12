@@ -1,7 +1,8 @@
 use godot::prelude::*;
 
-mod player;
+mod game_controller;
 mod grenade;
+mod player;
 mod sdf_controller;
 
 struct RustExtension;
