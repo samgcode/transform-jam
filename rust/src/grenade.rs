@@ -51,7 +51,7 @@ impl INode3D for Grenade {
       self.base_mut().queue_free();
     }
 
-    if position.length() > 5.0 {
+    if position.length() > 50.0 {
       self.exploded = true;
       return;
     }

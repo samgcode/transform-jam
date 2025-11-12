@@ -6,6 +6,8 @@ use crate::{
   sdf_controller::{self, SdfController},
 };
 
+const GRENADE_SPEED: f32 = 5.0;
+
 #[derive(GodotClass)]
 #[class(base = Node3D)]
 pub struct GameController {
@@ -46,28 +48,31 @@ impl INode3D for GameController {
       .connect_self(Self::on_remove_grenade);
   }
 
-  fn physics_process(&mut self, _dt: f64) {
+  fn physics_process(&mut self, dt: f64) {
     let player = self.player();
     let mut sdf_controller = self.sdf_controller();
 
     let player_collider = player.bind().get_points();
-    let collision_events = self
+    let player_velocity = {
+      let vel = player.bind().get_velocity();
+      Vector4::new(vel.x, vel.y, vel.z, 0.0) * dt as f32
+    };
+
+    let shapecast_events = self
       .sdf_controller()
       .bind_mut()
-      .compute_collision(player_collider);
+      .compute_shapecast(player_collider, player_velocity);
 
-    let mut highest_depth = 0.0;
-    let mut collision = Vector4::ZERO;
-    for i in 0..collision_events.len() {
-      if collision_events[i].w < highest_depth {
-        highest_depth = collision.w;
-        collision = collision_events[i];
+    let mut lowest_dist = 1.0;
+    let mut collision = Vector4::new(0.0, 0.0, 0.0, 1.0);
+    for i in 0..shapecast_events.len() {
+      if shapecast_events[i].length() != 0.0 && shapecast_events[i].w < lowest_dist {
+        lowest_dist = collision.w;
+        collision = shapecast_events[i];
       }
     }
 
-    if collision != Vector4::ZERO {
-      player.signals().collision().emit(collision);
-    }
+    player.signals().update_pos().emit(dt as f32, collision);
 
     if self.grenades.len() > 0 {
       let grenade_colliders = self.get_grenade_colliders();
@@ -97,6 +102,10 @@ impl INode3D for GameController {
 
       let (i, grenade) = self.grenades[i].clone();
       if grenade.bind().exploded {
+        player
+          .signals()
+          .explosion()
+          .emit(grenade.bind().get_position());
         self.on_remove_grenade(i as i32);
       } else {
         let position: Vector3 = grenade.bind().get_position();
@@ -129,7 +138,7 @@ impl GameController {
 
         grenade
           .bind_mut()
-          .initialize(position, direction, address as i32);
+          .initialize(position, direction * GRENADE_SPEED, address as i32);
 
         self.base_mut().add_child(&grenade);
 

@@ -6,7 +6,8 @@ use godot::classes::{
 };
 use godot::prelude::*;
 
-const SHADER_PATH: &str = "res://collision.glsl";
+const COLLISION_SHADER_PATH: &str = "res://collision.glsl";
+const SHAPECAST_SHADER_PATH: &str = "res://shapecast.glsl";
 
 const MAX_SHAPES: usize = 100;
 
@@ -121,7 +122,9 @@ impl IMeshInstance3D for SdfController {
 
 impl SdfController {
   pub fn compute_collision(&mut self, points: PackedVector4Array) -> Vec<Vector4> {
-    let shader_code = load::<RdShaderFile>(SHADER_PATH).get_spirv().unwrap();
+    let shader_code = load::<RdShaderFile>(COLLISION_SHADER_PATH)
+      .get_spirv()
+      .unwrap();
     let collision_shader = self.rendering_device.shader_create_from_spirv(&shader_code);
 
     let point_bytes = points.to_byte_array();
@@ -215,6 +218,120 @@ impl SdfController {
 
     let mut events = Vec::new();
     for i in 0..(output.len() / 4) {
+      events.push(Vector4::new(
+        output[i * 4 + 0],
+        output[i * 4 + 1],
+        output[i * 4 + 2],
+        output[i * 4 + 3],
+      ));
+    }
+    return events;
+  }
+
+  pub fn compute_shapecast(
+    &mut self,
+    points: PackedVector4Array,
+    velocity: Vector4,
+  ) -> Vec<Vector4> {
+    let shader_code = load::<RdShaderFile>(SHAPECAST_SHADER_PATH)
+      .get_spirv()
+      .unwrap();
+    let collision_shader = self.rendering_device.shader_create_from_spirv(&shader_code);
+
+    let mut points = points;
+    points.push(velocity);
+
+    let point_bytes = points.to_byte_array();
+    let position_bytes = self.positions.to_byte_array();
+    let property_bytes = self.properties.to_byte_array();
+    let data_bytes = PackedArray::from([self.blend_factor]).to_byte_array();
+
+    let point_buffer = self
+      .rendering_device
+      .storage_buffer_create_ex(point_bytes.len() as u32)
+      .data(&point_bytes)
+      .done();
+
+    let position_buffer = self
+      .rendering_device
+      .storage_buffer_create_ex(position_bytes.len() as u32)
+      .data(&position_bytes)
+      .done();
+
+    let property_buffer = self
+      .rendering_device
+      .storage_buffer_create_ex(property_bytes.len() as u32)
+      .data(&property_bytes)
+      .done();
+
+    let data_buffer = self
+      .rendering_device
+      .storage_buffer_create_ex(data_bytes.len() as u32)
+      .data(&data_bytes)
+      .done();
+
+    let mut points_uniform = RdUniform::new_gd();
+    points_uniform.set_uniform_type(UniformType::STORAGE_BUFFER);
+    points_uniform.set_binding(0);
+    points_uniform.add_id(point_buffer);
+
+    let mut position_uniform = RdUniform::new_gd();
+    position_uniform.set_uniform_type(UniformType::STORAGE_BUFFER);
+    position_uniform.set_binding(1);
+    position_uniform.add_id(position_buffer);
+
+    let mut property_uniform = RdUniform::new_gd();
+    property_uniform.set_uniform_type(UniformType::STORAGE_BUFFER);
+    property_uniform.set_binding(2);
+    property_uniform.add_id(property_buffer);
+
+    let mut data_uniform = RdUniform::new_gd();
+    data_uniform.set_uniform_type(UniformType::STORAGE_BUFFER);
+    data_uniform.set_binding(3);
+    data_uniform.add_id(data_buffer);
+
+    let uniform_set = self.rendering_device.uniform_set_create(
+      &Array::from(&[
+        points_uniform,
+        position_uniform,
+        property_uniform,
+        data_uniform,
+      ]),
+      collision_shader,
+      0,
+    );
+
+    let pipeline = self
+      .rendering_device
+      .compute_pipeline_create(collision_shader);
+    let compute_list = self.rendering_device.compute_list_begin();
+    self
+      .rendering_device
+      .compute_list_bind_compute_pipeline(compute_list, pipeline);
+    self
+      .rendering_device
+      .compute_list_bind_uniform_set(compute_list, uniform_set, 0);
+    self
+      .rendering_device
+      .compute_list_dispatch(compute_list, points.len() as u32 - 1, 1, 1);
+    self.rendering_device.compute_list_end();
+
+    self.rendering_device.submit();
+    self.rendering_device.sync();
+
+    let output_bytes = self.rendering_device.buffer_get_data(point_buffer);
+    let output = output_bytes.to_float32_array();
+
+    self.rendering_device.free_rid(uniform_set);
+    self.rendering_device.free_rid(point_buffer);
+    self.rendering_device.free_rid(position_buffer);
+    self.rendering_device.free_rid(property_buffer);
+    self.rendering_device.free_rid(data_buffer);
+    self.rendering_device.free_rid(pipeline);
+    self.rendering_device.free_rid(collision_shader);
+
+    let mut events = Vec::new();
+    for i in 0..(output.len() / 4 - 1) {
       events.push(Vector4::new(
         output[i * 4 + 0],
         output[i * 4 + 1],
