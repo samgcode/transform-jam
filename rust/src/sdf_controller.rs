@@ -1,9 +1,11 @@
+use godot::classes::file_access::ModeFlags;
 // use crate::game_controller::GameController;
 use godot::classes::rendering_device::UniformType;
 use godot::classes::{
-  IMeshInstance3D, MeshInstance3D, RdShaderFile, RdUniform, RenderingDevice, RenderingServer,
-  ShaderMaterial,
+  FileAccess, IMeshInstance3D, Input, MeshInstance3D, RdShaderFile, RdUniform, RenderingDevice,
+  RenderingServer, ShaderMaterial,
 };
+use godot::global::Key;
 use godot::prelude::*;
 
 const COLLISION_SHADER_PATH: &str = "res://collision.glsl";
@@ -69,29 +71,7 @@ impl IMeshInstance3D for SdfController {
   }
 
   fn ready(&mut self) {
-    let _ = self.new_shape(
-      Vector4::new(0.0, 0.0, -1.5, FLAG_NO_RENDER),
-      Vector4::new(0.02, 0.0, 0.0, 1.0),
-      Vector4::new(1.0, 1.0, 1.0, 0.0),
-    );
-
-    let _ = self.new_shape(
-      Vector4::new(0.0, -4.75, 0.0, FLAG_COLLISION),
-      Vector4::new(3.0, 0.0, 0.0, 1.0),
-      Vector4::new(1.0, 0.0, 0.0, 0.0),
-    );
-
-    let _ = self.new_shape(
-      Vector4::new(0.0, -3.0, 0.0, FLAG_COLLISION),
-      Vector4::new(5.0, 0.5, 5.0, 2.0),
-      Vector4::new(0.0, 0.0, 1.0, 0.0),
-    );
-
-    let _ = self.new_shape(
-      Vector4::new(3.0, -2.0, 0.0, FLAG_COLLISION),
-      Vector4::new(1.0, 1.0, 5.0, 2.0),
-      Vector4::new(1.0, 1.0, 1.0, 1.0),
-    );
+    self.load_map();
   }
 
   fn physics_process(&mut self, dt: f64) {
@@ -117,10 +97,109 @@ impl IMeshInstance3D for SdfController {
     material.set_shader_parameter(POSITIONS, &self.positions.to_variant());
     material.set_shader_parameter(PROPERTIES, &self.properties.to_variant());
     material.set_shader_parameter(COLORS, &self.colors.to_variant());
+
+    if Input::singleton().is_key_pressed(Key::TAB) {
+      self.print_map();
+    }
+    if Input::singleton().is_key_pressed(Key::Q) {
+      self.load_map();
+    }
   }
 }
 
 impl SdfController {
+  fn load_map(&mut self) {
+    self.positions = PackedArray::from([Vector4::ZERO; MAX_SHAPES]);
+    self.properties = PackedArray::from([Vector4::ZERO; MAX_SHAPES]);
+    self.colors = PackedArray::from([Vector4::ZERO; MAX_SHAPES]);
+    self.num_shapes = 0;
+    self.shapes_used = [false; MAX_SHAPES];
+
+    let file = FileAccess::open("res://default_map.txt", ModeFlags::READ).unwrap();
+    let content = file.get_as_text();
+    let content = content.split("\n");
+
+    for i in 0..content.len() {
+      let line = content[i].clone();
+      let properties = line.split("\t");
+      if properties.len() == 4 {
+        let mut split_properties = Vec::new();
+
+        for j in 0..properties.len() {
+          split_properties.push(properties[j].split(" "));
+        }
+
+        let shape_key = split_properties[0][0].clone();
+        let position = split_properties[1].clone();
+        let properties = split_properties[2].clone();
+        let color = split_properties[3].clone();
+
+        let mut shape = 0.0;
+        if shape_key == GString::from("sphere") {
+          shape = 1.0;
+        } else if shape_key == GString::from("cube") {
+          shape = 2.0;
+        }
+
+        let _ = self.new_shape(
+          Vector4::new(
+            position[1].to_string().parse::<f32>().unwrap(),
+            position[2].to_string().parse::<f32>().unwrap(),
+            position[3].to_string().parse::<f32>().unwrap(),
+            0.0,
+          ),
+          Vector4::new(
+            properties[1].to_string().parse::<f32>().unwrap(),
+            properties[2].to_string().parse::<f32>().unwrap(),
+            properties[3].to_string().parse::<f32>().unwrap(),
+            shape,
+          ),
+          Vector4::new(
+            color[1].to_string().parse::<f32>().unwrap(),
+            color[2].to_string().parse::<f32>().unwrap(),
+            color[3].to_string().parse::<f32>().unwrap(),
+            0.0,
+          ),
+        );
+      }
+    }
+  }
+
+  fn print_map(&self) {
+    godot_print!("current map file");
+    for i in 0..MAX_SHAPES {
+      let position = self.positions[i];
+      let properties = self.properties[i];
+      let color = self.colors[i];
+
+      if properties.w == 0.0 || position.w >= 1.0 {
+        continue;
+      }
+
+      let mut output = "".to_string();
+
+      if properties.w == 1.0 {
+        output = format!("{}sphere\t", output);
+      } else if properties.w == 2.0 {
+        output = format!("{}cube\t", output);
+      }
+
+      output = format!(
+        "{}position {} {} {}\t",
+        output, position.x, position.y, position.z
+      );
+
+      output = format!(
+        "{}scale {} {} {}\t",
+        output, properties.x, properties.y, properties.z
+      );
+
+      output = format!("{}color {} {} {}", output, color.x, color.y, color.z);
+
+      godot_print!("{}", output);
+    }
+  }
+
   pub fn compute_collision(&mut self, points: PackedVector4Array) -> Vec<Vector4> {
     let shader_code = load::<RdShaderFile>(COLLISION_SHADER_PATH)
       .get_spirv()
