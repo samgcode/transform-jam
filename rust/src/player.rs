@@ -16,18 +16,24 @@ const INPUT_THROW: &str = "throw";
 
 const JUMP: &str = "jump";
 
-const SPEED: f32 = 2.0;
+const GROUND_SPEED: f32 = 3.0;
 const AIR_SPEED: f32 = 3.0;
-const JUMP_HEIGHT: f32 = 2.0;
+const JUMP_HEIGHT: f32 = 3.0;
 const LOOK_SPEED: f32 = 0.002;
 
 const GRAVITY: Vector3 = Vector3 {
+  x: 0.0,
+  y: -9.0,
+  z: 0.0,
+};
+
+const JUMP_GRAVITY: Vector3 = Vector3 {
   x: 0.0,
   y: -5.0,
   z: 0.0,
 };
 
-const GRENADE_BOOST: f32 = 15.0;
+const GRENADE_BOOST: f32 = 5.0;
 const GRENADE_DIR: Vector3 = Vector3 {
   x: 1.0,
   y: 0.5,
@@ -35,9 +41,10 @@ const GRENADE_DIR: Vector3 = Vector3 {
 };
 const NUM_POINTS: usize = 6;
 
-const MOMENTUM: f32 = 0.5;
-const FAST_MOMENTUM: f32 = 0.75;
-const FAST_THRESHOLD: f32 = 2.0;
+const MOMENTUM: f32 = 0.85;
+const FAST_MOMENTUM: f32 = 0.99;
+const FAST_THRESHOLD: f32 = 4.0;
+const GROUND_ACCELERATION: f32 = 30.0;
 const AIR_ACCELERATION: f32 = 30.0;
 
 #[derive(GodotClass)]
@@ -65,10 +72,12 @@ impl INode3D for Player {
   }
 
   fn ready(&mut self) {
+    self.signals().collision().connect_self(Self::on_collision);
     self
       .signals()
       .update_pos()
       .connect_self(Self::on_update_pos);
+    self.signals().snap().connect_self(Self::on_snap);
     self.signals().explosion().connect_self(Self::on_explosion);
   }
 
@@ -90,6 +99,7 @@ impl INode3D for Player {
   }
 
   fn physics_process(&mut self, dt: f64) {
+    godot_print!("grounded: {}, yvel: {}", self.grounded, self.velocity.y);
     let mut direction = Vector3::ZERO;
 
     let vertical = (
@@ -117,19 +127,29 @@ impl INode3D for Player {
       }
     }
 
+    let vertical = self.velocity.dot(Y_AXIS) * Y_AXIS;
+    let horizontal = self.velocity - vertical;
+
     if direction != Vector3::ZERO {
       let direction = (self.base_mut().get_basis().mul(direction)).normalized();
       if self.grounded {
-        if self.velocity.x.abs() < direction.x.abs() {
-          self.velocity.x = direction.x * SPEED;
-        }
-        if self.velocity.z.abs() < direction.z.abs() {
-          self.velocity.z = direction.z * SPEED;
+        let move_force = direction * GROUND_ACCELERATION * dt as f32;
+
+        if horizontal.length() < GROUND_SPEED {
+          let target_velocity = horizontal + move_force;
+          let target_velocity =
+            target_velocity.normalized() * target_velocity.length().clamp(0.0, AIR_SPEED);
+
+          self.velocity += target_velocity - horizontal;
+        } else {
+          let constrained_move_force = project_on_plane(move_force, horizontal.normalized());
+          self.velocity += constrained_move_force;
+          if horizontal.dot(move_force) > 0.0 {
+          } else {
+            self.velocity += move_force;
+          }
         }
       } else {
-        let vertical = self.velocity.dot(Y_AXIS) * Y_AXIS;
-        let horizontal = self.velocity - vertical;
-
         let move_force = direction * AIR_ACCELERATION * dt as f32;
 
         if horizontal.length() < AIR_SPEED {
@@ -147,15 +167,23 @@ impl INode3D for Player {
           }
         }
       }
+    } else {
+      if self.grounded {
+        self.velocity *= MOMENTUM;
+      }
     }
 
     if self.grounded {
       if Input::singleton().is_action_just_pressed(JUMP) {
         self.velocity.y += JUMP_HEIGHT;
-        self.grounded = false;
       }
+      self.grounded = false;
     } else {
-      self.velocity += GRAVITY * dt as f32;
+      if self.velocity.y > 0.0 {
+        self.velocity += JUMP_GRAVITY * dt as f32;
+      } else {
+        self.velocity += GRAVITY * dt as f32;
+      }
     }
 
     if Input::singleton().is_action_just_pressed(INPUT_THROW) {
@@ -173,10 +201,13 @@ impl INode3D for Player {
     let horizontal = self.velocity - vertical;
 
     godot_print!(
-      "vertical: {:.5} horizontal: {:.5}",
+      "vertical: {:.5} ({:.5}) horizontal: {:.5}",
       vertical.length(),
+      self.velocity.y,
       horizontal.length()
     );
+
+    self.add_position(self.velocity * dt as f32);
   }
 }
 
@@ -188,10 +219,12 @@ const Y_AXIS: Vector3 = Vector3 {
 
 impl Player {
   pub fn on_update_pos(&mut self, dt: f32, shapecast: Vector4) {
+    self.add_position(self.velocity * dt);
+
     if shapecast.w < 1.0 {
       let normal = Vector3::new(shapecast.x, shapecast.y, shapecast.z).normalized();
 
-      let free_velocity = self.velocity * shapecast.w * 0.9;
+      let free_velocity = self.velocity * shapecast.w;
       let remaining_velocity = self.velocity - free_velocity;
       let slide_velocity = project_on_plane(remaining_velocity, normal);
 
@@ -212,14 +245,59 @@ impl Player {
     } else {
       self.grounded = false;
     }
+  }
 
-    self.add_position(self.velocity * dt);
+  pub fn on_collision(&mut self, collision: Vector4) {
+    let normal = Vector3::new(collision.x, collision.y, collision.z).normalized();
+
+    let verticality = normal.dot(Y_AXIS);
+
+    let parallel = self.velocity.dot(normal) * normal;
+    let perpendicular: Vector3 = self.velocity - parallel;
+
+    self.add_position(normal * -collision.w * 1.1);
+
+    if verticality < 0.0 {
+      // roof
+      self.velocity = perpendicular;
+    } else if verticality < 0.5 {
+      // wall
+      self.velocity = perpendicular;
+    } else {
+      // floor
+      let alignment = self.velocity.normalized().dot(normal);
+      if alignment < 0.0 {
+        // velocity is pointed into surface
+        if perpendicular.length() < FAST_THRESHOLD {
+          self.velocity = perpendicular * (0.75 + 0.25 * (1.0 + alignment)) * MOMENTUM;
+        } else {
+          self.velocity = perpendicular * (0.75 + 0.25 * (1.0 + alignment)) * FAST_MOMENTUM;
+        }
+      }
+      // self.grounded = true;
+      if self.velocity.y < 0.0 {
+        self.velocity.y = 0.0;
+      }
+    }
+  }
+
+  pub fn on_snap(&mut self, collision: Vector4) {
+    if self.velocity.y <= 0.0 {
+      let normal = Vector3::new(collision.x, collision.y, collision.z).normalized();
+
+      self.add_position(Vector3::new(0.0, -collision.w, 0.0));
+
+      if normal.dot(Y_AXIS) >= 0.5 {
+        self.grounded = true;
+        self.velocity.y = 0.0;
+      }
+    }
   }
 
   fn on_explosion(&mut self, position: Vector3) {
     let vector = self.get_position() - position;
-    let direction = GRENADE_DIR.normalized();
-    let direction = vector.normalized() * direction;
+    // let direction = GRENADE_DIR.normalized();
+    let direction = vector.normalized();
     let distance = vector.length();
 
     if distance < 5.0 {
@@ -290,6 +368,10 @@ impl Player {
 impl Player {
   #[signal]
   pub fn update_pos(dt: f32, shapecast: Vector4);
+  #[signal]
+  pub fn collision(collision: Vector4);
+  #[signal]
+  pub fn snap(collision: Vector4);
   #[signal]
   pub fn explosion(position: Vector3);
 }

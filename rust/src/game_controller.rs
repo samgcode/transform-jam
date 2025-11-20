@@ -58,10 +58,49 @@ impl INode3D for GameController {
       Vector4::new(vel.x, vel.y, vel.z, 0.0) * dt as f32
     };
 
+    // let shapecast_events = self
+    //   .sdf_controller()
+    //   .bind_mut()
+    //   .compute_shapecast(player_collider, player_velocity);
+
+    // let mut lowest_dist = 1.0;
+    // let mut collision = Vector4::new(0.0, 0.0, 0.0, 1.0);
+    // for i in 0..shapecast_events.len() {
+    //   if shapecast_events[i].length() != 0.0 && shapecast_events[i].w < lowest_dist {
+    //     lowest_dist = collision.w;
+    //     collision = shapecast_events[i];
+    //   }
+    // }
+
+    // player.signals().update_pos().emit(dt as f32, collision);
+
+    let player_collider = player.bind().get_points();
+    let collision_events = self
+      .sdf_controller()
+      .bind_mut()
+      .compute_collision(player_collider);
+
+    let mut highest_depth = 0.0;
+    let mut collision = Vector4::ZERO;
+    for i in 0..collision_events.len() {
+      if collision_events[i].w < highest_depth {
+        highest_depth = collision.w;
+        collision = collision_events[i];
+      }
+    }
+
+    if collision != Vector4::ZERO {
+      player.signals().collision().emit(collision);
+    }
+
+    // floor snapping
+    let player_collider = player.bind().get_points();
+    let snap_direction = Vector4::new(0.0, -0.1, 0.0, 0.0);
+
     let shapecast_events = self
       .sdf_controller()
       .bind_mut()
-      .compute_shapecast(player_collider, player_velocity);
+      .compute_shapecast(player_collider, snap_direction);
 
     let mut lowest_dist = 1.0;
     let mut collision = Vector4::new(0.0, 0.0, 0.0, 1.0);
@@ -72,7 +111,11 @@ impl INode3D for GameController {
       }
     }
 
-    player.signals().update_pos().emit(dt as f32, collision);
+    if collision.w < 1.0 {
+      // godot_print!("collision: {}", collision.w);
+      collision.w *= 0.1;
+      player.signals().snap().emit(collision);
+    }
 
     if self.grenades.len() > 0 {
       let grenade_colliders = self.get_grenade_colliders();

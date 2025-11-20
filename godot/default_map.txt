@@ -3,4 +3,6 @@ cube	position -26 -3 0	scale 30 0.5 5	color 0 1 1
 cube	position -26 -3 -6	scale 30 10 1	color 0 1 1
 cube	position -26 -3 6	scale 30 10 1	color 0 1 1
 cube	position 3 -2 0	scale 1 1 5	color 1 1 1
+cube	position -13 0 0	scale 2 0.5 5	color 1 1 1
+cube	position -37 0 0	scale 2 0.5 5	color 1 1 1
 sphere	position -10 -3 0	scale 2 0 0	color 0.25 0 1
